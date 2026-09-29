@@ -21,6 +21,15 @@ def wait_for(path: Path, timeout: float = 12.0) -> None:
     raise AssertionError(f"timed out waiting for {path}")
 
 
+def wait_for_text(path: Path, expected: str, timeout: float = 12.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.exists() and path.read_text().strip() == expected:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"timed out waiting for {path} to contain {expected!r}")
+
+
 def parse_started(stdout: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for line in stdout.splitlines():
@@ -77,7 +86,9 @@ class LongrunLifecycleTests(unittest.TestCase):
         _, job_dir = self.launch("ok", [sys.executable, "-c", "print('ok')"])
         state, rc = self.wait_terminal(job_dir)
         self.assertEqual((state, rc), ("finished", 0))
+        wait_for_text(job_dir / "notify.status", "sent")
         self.assertEqual((job_dir / "notify.status").read_text().strip(), "sent")
+        wait_for(self.queue_log)
         self.assertIn("queue --thread test-thread-id", self.queue_log.read_text())
 
     def test_command_failure(self) -> None:
